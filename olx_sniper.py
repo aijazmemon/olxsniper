@@ -4,7 +4,6 @@ from playwright.sync_api import sync_playwright
 
 OLX_WEB_URL = "https://www.olx.in/mira-road_g5460046/scooters_c1413?filter=make_eq_suzuki-scooter%2Cmodel_eq_scooters-suzuki-burgman%2Cprice_max_64000&sorting=desc-creation"
 TELEGRAM_CHAT_ID = "-5318874682"
-# Securely fetch the token from GitHub Secrets
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") 
 SEEN_FILE = "seen_ids.txt"
 
@@ -71,7 +70,6 @@ def main():
                 if ad_id not in seen_listings:
                     details_text = " | ".join(lines)
                     print(f"🔥 Live ad caught: {price_text}")
-                    # Only send alerts if this isn't the very first initialization run
                     if seen_listings:
                         send_telegram_alert("Burgman Listing", price_text, details_text, full_link)
                     
@@ -83,13 +81,12 @@ def main():
         finally:
             browser.close()
 
+    # Fixed and cleanly aligned status logic block
     if new_finds:
         save_seen(seen_listings)
-        if new_finds:
-        save_seen(seen_listings)
+        print("✅ New listings found and saved.")
     else:
-        # This prints silently to your GitHub Actions console so you can see it's working!
-        print("✅ Scan complete: Checked OLX successfully, but no new Burgman listings found.")
+        print("🔍 Scan complete: Checked OLX successfully, but no new Burgman listings found.")
 
 if __name__ == "__main__":
     main()
