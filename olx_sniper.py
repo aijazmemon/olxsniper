@@ -81,12 +81,23 @@ def main():
         finally:
             browser.close()
 
-    # Fixed and cleanly aligned status logic block
+   # Fixed and cleanly aligned status logic block
     if new_finds:
         save_seen(seen_listings)
         print("✅ New listings found and saved.")
     else:
         print("🔍 Scan complete: Checked OLX successfully, but no new Burgman listings found.")
+        # Send the hourly heartbeat message to Telegram
+        url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+        payload = {
+            "chat_id": TELEGRAM_CHAT_ID, 
+            "text": "🔍 *Update:* No new Burgman listings in the last 1 hour.", 
+            "parse_mode": "Markdown"
+        }
+        try:
+            requests.post(url, json=payload, timeout=10)
+        except Exception as e:
+            print(f"Failed to send empty run alert: {e}")
 
 if __name__ == "__main__":
     main()
