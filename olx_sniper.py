@@ -85,6 +85,11 @@ def main():
 
     if new_finds:
         save_seen(seen_listings)
+        if new_finds:
+        save_seen(seen_listings)
+    else:
+        # This prints silently to your GitHub Actions console so you can see it's working!
+        print("✅ Scan complete: Checked OLX successfully, but no new Burgman listings found.")
 
 if __name__ == "__main__":
     main()
