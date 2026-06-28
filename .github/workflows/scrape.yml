@@ -1,0 +1,38 @@
+name: OLX Sniper Bot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Runs automatically every 5 minutes
+  workflow_dispatch:      # Gives you a button to run it manually
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install playwright requests
+          playwright install firefox
+          sudo npx playwright install-deps firefox
+
+      - name: Run Sniper Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+        run: python olx_sniper.py
+
+      - name: Commit and Push State
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add seen_ids.txt
+          # Only commit if seen_ids.txt was updated by the script
+          git commit -m "Update seen listings cache" || echo "No new listings found"
+          git push
