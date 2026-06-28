@@ -5,6 +5,9 @@ on:
     - cron: '*/5 * * * *' # Runs automatically every 5 minutes
   workflow_dispatch:      # Gives you a button to run it manually
 
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
