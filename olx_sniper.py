@@ -3,7 +3,7 @@ import requests
 from playwright.sync_api import sync_playwright
 
 # --- CONFIGURATION MAP ---
-# Maps specific vehicle tracking targets to their updated target URLs
+# Contains all 4 vehicles and their specific OLX filter links
 TARGETS = {
     "Burgman": "https://www.olx.in/en-in/mira-road_g5460046/scooters_c1413?filter=make_eq_suzuki-scooter%2Cmodel_eq_scooters-suzuki-burgman%2Cprice_max_78000&sorting=desc-creation",
     "Unicorn": "https://www.olx.in/en-in/mira-road_g5460046/motorcycles_c81?filter=make_eq_honda%2Cmodel_eq_honda-cb-unicorn-150_and_honda-cb-unicorn&sorting=desc-creation",
@@ -26,11 +26,14 @@ def save_seen(seen_set):
         for ad_id in seen_set:
             f.write(f"{ad_id}\n")
 
+# Updated to accept target_name so the message changes automatically
 def send_telegram_alert(target_name, title, price, details, link):
-    # Dynamically formats the header title based on what was found
+    # Use a car emoji for Honda City, bike emoji for the rest
+    icon = "🚗" if "honda city" in target_name.lower() else "🏍️"
+    
     message = (
         f"🚨 **NEW {target_name.upper()} DEAL SPOTTED** 🚨\n\n"
-        f"🚗 **Model:** {title}\n"
+        f"{icon} **Model:** {title}\n"
         f"💰 **Price:** {price}\n"
         f"📋 **Details:** {details}\n\n"
         f"🔗 **Open Listing:** {link}"
@@ -51,7 +54,7 @@ def main():
         )
         page = context.new_page()
         
-        # Iterates through each targeted vehicle link sequentially
+        # Loop through all 4 vehicles
         for target_name, target_url in TARGETS.items():
             print(f"🔍 Scanning market for: {target_name}...")
             try:
@@ -75,7 +78,7 @@ def main():
                     
                     try:
                         numeric_price = int(price_text.replace("₹", "").replace(",", "").strip())
-                        # Universal safeguard baseline filters for outliers
+                        # Universal safeguard baseline filter
                         if numeric_price <= 15000: continue
                     except ValueError:
                         continue
@@ -86,6 +89,7 @@ def main():
                         
                         # Only fire the alert if this isn't the initial setup run
                         if seen_listings:
+                            # Pass the target_name to the alert function!
                             send_telegram_alert(target_name, lines[0] if lines else target_name, price_text, details_text, full_link)
                         
                         seen_listings.add(ad_id)
@@ -96,13 +100,13 @@ def main():
                 
         browser.close()
 
-    # Dynamic tracking status logic execution block
+    # Status update logic
     if new_finds:
         save_seen(seen_listings)
-        print("✅ New listings found and structural file updated.")
+        print("✅ New listings found and saved.")
     else:
         print("🔍 Scan complete: No new vehicle updates across all target lists.")
-        # Consolidated concise heartbeat message for the group chat
+        # Consolidated hourly heartbeat message
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID, 
