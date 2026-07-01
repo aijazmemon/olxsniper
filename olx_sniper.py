@@ -2,7 +2,15 @@ import os
 import requests
 from playwright.sync_api import sync_playwright
 
-OLX_WEB_URL = "https://www.olx.in/mira-road_g5460046/scooters_c1413?filter=make_eq_suzuki-scooter%2Cmodel_eq_scooters-suzuki-burgman%2Cprice_max_64000&sorting=desc-creation"
+# --- CONFIGURATION MAP ---
+# Maps specific vehicle tracking targets to their updated target URLs
+TARGETS = {
+    "Burgman": "https://www.olx.in/en-in/mira-road_g5460046/scooters_c1413?filter=make_eq_suzuki-scooter%2Cmodel_eq_scooters-suzuki-burgman%2Cprice_max_78000&sorting=desc-creation",
+    "Unicorn": "https://www.olx.in/en-in/mira-road_g5460046/motorcycles_c81?filter=make_eq_honda%2Cmodel_eq_honda-cb-unicorn-150_and_honda-cb-unicorn&sorting=desc-creation",
+    "Access 125": "https://www.olx.in/en-in/mira-road_g5460046/scooters_c1413?filter=make_eq_suzuki-scooter%2Cmodel_eq_suzuki-scooter-access-125%2Cprice_max_54000%2Cyear_between_2020_to_2024&sorting=desc-creation",
+    "Honda City I-vtec": "https://www.olx.in/en-in/mira-road_g5460046/cars_c84?filter=make_eq_cars-honda%2Cmodel_eq_cars-honda-city%2Cprice_max_130000%2Cyear_between_2009_to_2012"
+}
+
 TELEGRAM_CHAT_ID = "-5318874682"
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN") 
 SEEN_FILE = "seen_ids.txt"
@@ -18,10 +26,11 @@ def save_seen(seen_set):
         for ad_id in seen_set:
             f.write(f"{ad_id}\n")
 
-def send_telegram_alert(title, price, details, link):
+def send_telegram_alert(target_name, title, price, details, link):
+    # Dynamically formats the header title based on what was found
     message = (
-        f"🚨 **NEW BURGMAN DEAL SPOTTED** 🚨\n\n"
-        f"🏍️ **Model:** {title}\n"
+        f"🚨 **NEW {target_name.upper()} DEAL SPOTTED** 🚨\n\n"
+        f"🚗 **Model:** {title}\n"
         f"💰 **Price:** {price}\n"
         f"📋 **Details:** {details}\n\n"
         f"🔗 **Open Listing:** {link}"
@@ -42,56 +51,62 @@ def main():
         )
         page = context.new_page()
         
-        try:
-            page.goto(OLX_WEB_URL, timeout=45000, wait_until="domcontentloaded")
-            page.wait_for_timeout(5000)
-            
-            ad_links = page.locator("a[href*='/item/']").all()
-            
-            for link_element in ad_links:
-                href = link_element.get_attribute("href")
-                if not href: continue
+        # Iterates through each targeted vehicle link sequentially
+        for target_name, target_url in TARGETS.items():
+            print(f"🔍 Scanning market for: {target_name}...")
+            try:
+                page.goto(target_url, timeout=45000, wait_until="domcontentloaded")
+                page.wait_for_timeout(5000)
                 
-                full_link = f"https://www.olx.in{href}" if href.startswith("/") else href
-                ad_id = href.split("-iid-")[-1] if "-iid-" in href else href.split("/")[-1]
-                raw_text = link_element.inner_text()
+                ad_links = page.locator("a[href*='/item/']").all()
                 
-                if len(raw_text.strip()) < 5: continue
-                
-                lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
-                price_text = next((line for line in lines if "₹" in line), "0")
-                
-                try:
-                    numeric_price = int(price_text.replace("₹", "").replace(",", "").strip())
-                    if numeric_price <= 30000: continue
-                except ValueError:
-                    continue
-
-                if ad_id not in seen_listings:
-                    details_text = " | ".join(lines)
-                    print(f"🔥 Live ad caught: {price_text}")
-                    if seen_listings:
-                        send_telegram_alert("Burgman Listing", price_text, details_text, full_link)
+                for link_element in ad_links:
+                    href = link_element.get_attribute("href")
+                    if not href: continue
                     
-                    seen_listings.add(ad_id)
-                    new_finds = True
+                    full_link = f"https://www.olx.in{href}" if href.startswith("/") else href
+                    ad_id = href.split("-iid-")[-1] if "-iid-" in href else href.split("/")[-1]
+                    raw_text = link_element.inner_text()
+                    
+                    if len(raw_text.strip()) < 5: continue
+                    
+                    lines = [line.strip() for line in raw_text.split('\n') if line.strip()]
+                    price_text = next((line for line in lines if "₹" in line), "0")
+                    
+                    try:
+                        numeric_price = int(price_text.replace("₹", "").replace(",", "").strip())
+                        # Universal safeguard baseline filters for outliers
+                        if numeric_price <= 15000: continue
+                    except ValueError:
+                        continue
 
-        except Exception as e:
-            print(f"Scrape Error: {e}")
-        finally:
-            browser.close()
+                    if ad_id not in seen_listings:
+                        details_text = " | ".join(lines)
+                        print(f"🔥 Live {target_name} ad caught: {price_text}")
+                        
+                        # Only fire the alert if this isn't the initial setup run
+                        if seen_listings:
+                            send_telegram_alert(target_name, lines[0] if lines else target_name, price_text, details_text, full_link)
+                        
+                        seen_listings.add(ad_id)
+                        new_finds = True
 
-   # Fixed and cleanly aligned status logic block
+            except Exception as e:
+                print(f"Scrape Error while processing {target_name}: {e}")
+                
+        browser.close()
+
+    # Dynamic tracking status logic execution block
     if new_finds:
         save_seen(seen_listings)
-        print("✅ New listings found and saved.")
+        print("✅ New listings found and structural file updated.")
     else:
-        print("🔍 Scan complete: Checked OLX successfully, but no new Burgman listings found.")
-        # Send the hourly heartbeat message to Telegram
+        print("🔍 Scan complete: No new vehicle updates across all target lists.")
+        # Consolidated concise heartbeat message for the group chat
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         payload = {
             "chat_id": TELEGRAM_CHAT_ID, 
-            "text": "🔍 *Update:* No new Burgman listings in the last 1 hour.", 
+            "text": "🔍 *Update:* No new Burgman, Access, Unicorn, or Honda City listings in the last 1 hour.", 
             "parse_mode": "Markdown"
         }
         try:
